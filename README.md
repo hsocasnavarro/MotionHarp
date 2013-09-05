@@ -3,16 +3,15 @@ MotionHarp
 
 MOTION HARP: Music with a 3D interface using Linux, Python and the Leap Motion
 
-# (2013) Hector Socas Navarro: MOTION HARP
-#
-# Requirements:
-#   * Python
-#   * pygame
-#   * LeapMotion SDK
-#   * if not in your path, LeapSDK/lib/Leap.py and LeapSDK/lib/x??/LeapPython.so
-#        must be present in the running directory
-#   * OPTIONAL. If you have xdotool then the mouse pointer will show
-#        the notes played
+(2013) Hector Socas Navarro: MOTION HARP
+Requirements:
+ * Python
+ * pygame
+ * LeapMotion SDK
+ * if not in your path, LeapSDK/lib/Leap.py and LeapSDK/lib/x??/LeapPython.so
+      must be present in the running directory
+ * OPTIONAL. If you have xdotool then the mouse pointer will show
+      the notes played
 #
 # Instructions:
 #
