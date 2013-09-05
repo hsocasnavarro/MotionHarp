@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 # 
-# (2013) Hector Socas Navarro: MOTION HARP
+# (2013) Hector Socas Navarro (hsocas.iac@gmail.com): MOTION HARP
 #
 # Requirements:
 #   * Python
