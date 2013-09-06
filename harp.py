@@ -5,6 +5,7 @@
 # Requirements:
 #   * Python
 #   * pygame
+#   * python-Xlib (only to get screen resolution)
 #   * LeapMotion SDK
 #   * if not in your path, LeapSDK/lib/Leap.py and LeapSDK/lib/x??/LeapPython.so
 #        must be present in the running directory
@@ -51,7 +52,7 @@
 
 import Leap, pygame, pygame.midi, sys, os
 from time import sleep
-from Leap import CircleGesture, KeyTapGesture, ScreenTapGesture, SwipeGesture
+from Xlib import X, display
 
 class HSNListener(Leap.Listener):
     debug=1
@@ -84,12 +85,10 @@ class HSNListener(Leap.Listener):
         import subprocess, re
         from time import sleep
 # Get screen resolution
-        p=subprocess.Popen(['xdpyinfo'],stdout=subprocess.PIPE)
-        out,err=p.communicate()
-        dim_search=re.search('dimensions:(\ *[0-9]*)x',out,re.IGNORECASE)
-        HSNListener.screenx=int(dim_search.group(1))
-        dim_search=re.search('dimensions:\ *[0-9]*x([0-9]*) ',out,re.IGNORECASE)
-        HSNListener.screeny=int(dim_search.group(1))
+        displ=display.Display()
+        s=displ.screen()
+        HSNListener.screenx=s.width_in_pixels
+        HSNListener.screeny=s.height_in_pixels
         print "Screen size is:",HSNListener.screenx,HSNListener.screeny
 # Initialize midi
 #        subprocess.call(['aconnect',midiclientout,midiclientin])
@@ -170,10 +169,14 @@ class HSNListener(Leap.Listener):
         def flush_buffer():
             HSNListener.prevframes[0:HSNListener.nframes]=HSNListener.frames[0:HSNListener.nframes]
 
-        import commands, chords
+        import chords
         from subprocess import call
         from time import sleep
         from random import choice
+        try:
+            import commands
+        except:
+            donothing=1
 
         debug = HSNListener.debug
         mnfing = HSNListener.maxnfingers
