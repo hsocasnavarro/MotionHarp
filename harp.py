@@ -9,8 +9,6 @@
 #   * LeapMotion SDK
 #   * if not in your path, LeapSDK/lib/Leap.py and LeapSDK/lib/x??/LeapPython.so
 #        must be present in the running directory
-#   * OPTIONAL. If you have xdotool then the mouse pointer will show
-#        the notes played
 #
 # Instructions:
 #
@@ -55,7 +53,7 @@ from time import sleep
 from Xlib import X, display
 
 class HSNListener(Leap.Listener):
-    debug=1
+    debug=0
     busy=0
     screenx=0
     screeny=0
@@ -68,6 +66,9 @@ class HSNListener(Leap.Listener):
     stringnotes=list()
     nframes=10 # frames to average
     releaselocks=0L
+# For X
+    gc=0
+    root=0
 # For midi
     pygame.init()
     pygame.midi.init()
@@ -87,6 +88,7 @@ class HSNListener(Leap.Listener):
 # Get screen resolution
         displ=display.Display()
         s=displ.screen()
+        HSNListener.root=s.root
         HSNListener.screenx=s.width_in_pixels
         HSNListener.screeny=s.height_in_pixels
         print "Screen size is:",HSNListener.screenx,HSNListener.screeny
@@ -201,6 +203,9 @@ class HSNListener(Leap.Listener):
 # Get average quantities from frame collections
         norm=1./HSNListener.nframes
         norm2=1./(nframes-nframes2+1)
+        prevavfingx=[0.]*mnfing
+        prevavfingy=[0.]*mnfing
+        prevavfingz=[0.]*mnfing
         avfingx=[0.]*mnfing
         avfingy=[0.]*mnfing
         avfingz=[0.]*mnfing
@@ -300,13 +305,46 @@ class HSNListener(Leap.Listener):
                 if naddedfing[idx] > 2 and (avfinghand[idx] < 0.1 or avfinghand[idx] > 0.9): # Set this finger as a valid one
                     validfinger[idx]=1
 
+        naddedfing=[0]*mnfing
+        for Fr in HSNListener.prevframes[0:nframes]:
+            if Fr.hands[0].is_valid:
+                for finger in Fr.hands[0].fingers:
+                    fid=finger.id
+                    if fid > len(avfingx):
+                        print 'Warning!!, fid=',fid
+                        for i in range(20):
+                            print ''
+                    prevavfingx[fid]+=finger.tip_position[0]
+                    prevavfingy[fid]+=finger.tip_position[1]
+                    prevavfingz[fid]+=finger.tip_position[2]
+                    naddedfing[fid]+=1
+        for Fr in HSNListener.prevframes[0:nframes]:
+            if Fr.hands[1].is_valid:
+                for finger in Fr.hands[1].fingers:
+                    fid=finger.id
+                    if fid > len(avfingx):
+                        print 'Warning!!, fid=',fid
+                        for i in range(20):
+                            print ''
+                    prevavfingx[fid]+=finger.tip_position[0]
+                    prevavfingy[fid]+=finger.tip_position[1]
+                    prevavfingz[fid]+=finger.tip_position[2]
+                    naddedfing[fid]+=1
+        for idx in range(mnfing):
+            if naddedfing[idx] > 0:
+                prevavfingx[idx]=prevavfingx[idx]*1./naddedfing[idx]
+                prevavfingy[idx]=prevavfingy[idx]*1./naddedfing[idx]
+                prevavfingz[idx]=prevavfingz[idx]*1./naddedfing[idx]
+
+
+
         if avnhands > 0.5:
             for hand in currentframe.hands:
                 palmpos=[0.,0.,0.]
                 for finger in hand.fingers: # Loop in fingers
                     fid=finger.id
                     if HSNListener.fingerlock[fid] > 0: #locked?
-                        if (currentframe.timestamp-HSNListener.fingerlock[fid]*1.0)*1E-6 > 0.5:          # Release if locked over some time
+                        if (currentframe.timestamp-HSNListener.fingerlock[fid]*1.0)*1E-6 > 1:          # Release if locked over some time
                             HSNListener.fingerlock[fid]=0.
                     if validfinger[fid] == 1:
                         handid=int(avfinghand[fid])
@@ -318,7 +356,7 @@ class HSNListener(Leap.Listener):
                             palmpos=[avpos2[0],avpos2[1],avpos2[2]]
                             avvel=avvel2
     # release all locks if moving horizontally or upwards
-                        if abs(avvel[0]) > 500 or HSNListener.releaselocks != 0: 
+                        if abs(avvel[0]) > 1000 or HSNListener.releaselocks != 0: 
                             if HSNListener.releaselocks == 0: 
                                 HSNListener.releaselocks = currentframe.timestamp
                                 print 'releasing locks for 2 seconds'#,avvel
@@ -330,17 +368,16 @@ class HSNListener(Leap.Listener):
                                 HSNListener.fingerlock[idx]=0.
 
                         fingnote[finger.id]=0
-                        if avfingvy[fid] < -50: # Play note
+                        if avfingy[fid]-prevavfingy[fid] < -10 and \
+                                abs(avfingy[fid]-prevavfingy[fid]) < 50 and \
+                                    HSNListener.fingerlock[finger.id] == 0: # Play note
                             coordx=((pos[0]-HSNListener.offsetx)+200.)/400.*HSNListener.screenx
                             coordx=min(coordx,HSNListener.screenx)
                             coordx=max(coordx,0)
                             coordy=(1.-((pos[1]-HSNListener.offsety))/400.)*HSNListener.screeny
                             coordy=min(coordy,HSNListener.screeny)
                             coordy=max(coordy,0)
-                            try:
-                                commands.getoutput('xdotool mousemove '+str(coordx)+' '+str(coordy))
-                            except:
-                                donothing=1
+                            HSNListener.root.warp_pointer(coordx,coordy)
                             notes=chords.ChordKeys[chords2play[HSNListener.indchord]]
                             if pos[1] < 250:
                                 note=choice(notes)
@@ -383,7 +420,7 @@ class HSNListener(Leap.Listener):
                             HSNListener.indchord=min(HSNListener.indchord,len(chords2play)-1)
 
 
-                        if avfingvy[fid] > 30: # If finger moves up, release locks
+                        if avfingy[fid] > prevavfingy[fid]+10 or avfingvy[fid] > 40: # If finger moves up, release locks
                             HSNListener.fingerlock[fid] = 0
 
 
