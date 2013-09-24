@@ -49,10 +49,10 @@
 # performance. Reference: http://stackoverflow.com/questions/10888846/python-subprocess-module-much-slower-than-commands-deprecated
 
 import Leap, pygame, pygame.midi, sys, os
-from time import sleep
+from time import sleep, clock
 from Xlib import X, display
 
-class HSNListener(Leap.Listener):
+class Listnr(Leap.Listener):
     debug=0
     busy=0
     screenx=0
@@ -88,10 +88,10 @@ class HSNListener(Leap.Listener):
 # Get screen resolution
         displ=display.Display()
         s=displ.screen()
-        HSNListener.root=s.root
-        HSNListener.screenx=s.width_in_pixels
-        HSNListener.screeny=s.height_in_pixels
-        print "Screen size is:",HSNListener.screenx,HSNListener.screeny
+        Listnr.root=s.root
+        Listnr.screenx=s.width_in_pixels
+        Listnr.screeny=s.height_in_pixels
+        print "Screen size is:",Listnr.screenx,Listnr.screeny
 # Initialize midi
 #        subprocess.call(['aconnect',midiclientout,midiclientin])
         print "If your keyboard doesn't play, try to find the device input and output"
@@ -121,33 +121,32 @@ class HSNListener(Leap.Listener):
             print 'Error finding MIDI port'
             pygame.midi.quit()
             os._exit(1)
-        del HSNListener.midi
+        del Listnr.midi
 
         try:
-            HSNListener.midi=pygame.midi.Output(port)
+            Listnr.midi=pygame.midi.Output(port)
         except:
             print "Couldn't connect to port, trying the default"
-            HSNListener.midi=pygame.midi.Output(0)
+            Listnr.midi=pygame.midi.Output(0)
 
 # Open file with debug output
-        if HSNListener.debug == 1:
+        if Listnr.debug == 1:
             f=open('output.txt','w')
             for ind in range(5): f.write(str(ind)+'\n')
             f.close()
 # Create frame buffer
         print 'Initializing Leap Motion...'
-        itry=0
-        while (not controller.frame(2*HSNListener.nframes).is_valid):
-            itry+=1
-            if itry == 1e5:
+        time0=clock()
+        while (not controller.frame(2*Listnr.nframes).is_valid):
+            if clock()-time0 > 5:
+                print "Timeout waiting for valid frames from the Leap Motion."
                 print "Something's not right. Make sure the Leap Motion is connected"
                 print 'and the leapd daemon is running'
-                pygame.midi.quit()
-                os._exit(1)
-        for iframe in range(HSNListener.nframes):
-            HSNListener.frames.append(controller.frame(iframe))
-            HSNListener.prevframes.append(controller.frame(iframe+HSNListener.nframes))
-        print "Frame buffer sizes:",len(HSNListener.frames),len(HSNListener.prevframes)
+                sys.exit(1)
+        for iframe in range(Listnr.nframes):
+            Listnr.frames.append(controller.frame(iframe))
+            Listnr.prevframes.append(controller.frame(iframe+Listnr.nframes))
+        print "Frame buffer sizes:",len(Listnr.frames),len(Listnr.prevframes)
         print "Initialized"
 
     def on_connect(self, controller):
@@ -169,7 +168,7 @@ class HSNListener(Leap.Listener):
     def on_frame(self, controller):
 
         def flush_buffer():
-            HSNListener.prevframes[0:HSNListener.nframes]=HSNListener.frames[0:HSNListener.nframes]
+            Listnr.prevframes[0:Listnr.nframes]=Listnr.frames[0:Listnr.nframes]
 
         import chords
         from subprocess import call
@@ -180,28 +179,28 @@ class HSNListener(Leap.Listener):
         except:
             donothing=1
 
-        debug = HSNListener.debug
-        mnfing = HSNListener.maxnfingers
+        debug = Listnr.debug
+        mnfing = Listnr.maxnfingers
         chords2play=['G ','F ','A min','D min','C ']
 
         currentframe=controller.frame()
 
-        nframes2=int(HSNListener.nframes/2) # Use few frames for pointing to avoid lag
-        nframes=HSNListener.nframes
+        nframes2=int(Listnr.nframes/2) # Use few frames for pointing to avoid lag
+        nframes=Listnr.nframes
 
-        HSNListener.midi.set_instrument(HSNListener.Instrument1,0)
-        HSNListener.midi.set_instrument(HSNListener.Instrument2,1)
+        Listnr.midi.set_instrument(Listnr.Instrument1,0)
+        Listnr.midi.set_instrument(Listnr.Instrument2,1)
 
-        HSNListener.prevframes.pop(0) # Remove first element and shift list
-        HSNListener.prevframes.append(HSNListener.frames[0])
-        HSNListener.frames.pop(0) # Remove first element and shift list
-        HSNListener.frames.append(currentframe)
+        Listnr.prevframes.pop(0) # Remove first element and shift list
+        Listnr.prevframes.append(Listnr.frames[0])
+        Listnr.frames.pop(0) # Remove first element and shift list
+        Listnr.frames.append(currentframe)
 
         basenotes=['C ','D ','E ','F ','G ','A ','B ']
 
         numfingers=len(currentframe.hands[0].fingers)
 # Get average quantities from frame collections
-        norm=1./HSNListener.nframes
+        norm=1./Listnr.nframes
         norm2=1./(nframes-nframes2+1)
         prevavfingx=[0.]*mnfing
         prevavfingy=[0.]*mnfing
@@ -215,17 +214,17 @@ class HSNListener(Leap.Listener):
         fingnote=[0]*mnfing
         avfinghand=[0]*mnfing
         validfinger=[0]*mnfing
-        avtime=sum(Fr.timestamp for Fr in HSNListener.frames)*norm
-        prevavtime=sum(Fr.timestamp for Fr in HSNListener.prevframes)*norm
-        avnhands=sum(len(Fr.hands) for Fr in HSNListener.frames)*norm
-        prevavnhands=sum(len(Fr.hands) for Fr in HSNListener.prevframes)*norm
-        avpitch=sum(Fr.hands[0].direction.pitch for Fr in HSNListener.frames)*Leap.RAD_TO_DEG*norm
-        avroll=sum(Fr.hands[0].palm_normal.roll for Fr in HSNListener.frames)*Leap.RAD_TO_DEG*norm
-        avsphere=sum(Fr.hands[0].sphere_radius for Fr in HSNListener.frames)*norm
-        prevavpitch=sum(Fr.hands[0].direction.pitch for Fr in HSNListener.prevframes)*Leap.RAD_TO_DEG*norm
-        prevavroll=sum(Fr.hands[0].palm_normal.roll for Fr in HSNListener.prevframes)*Leap.RAD_TO_DEG*norm
-        avnumfingers=sum(len(Fr.hands[0].fingers) for Fr in HSNListener.frames)*norm
-        prevavnumfingers=sum(len(Fr.hands[0].fingers) for Fr in HSNListener.prevframes)*norm
+        avtime=sum(Fr.timestamp for Fr in Listnr.frames)*norm
+        prevavtime=sum(Fr.timestamp for Fr in Listnr.prevframes)*norm
+        avnhands=sum(len(Fr.hands) for Fr in Listnr.frames)*norm
+        prevavnhands=sum(len(Fr.hands) for Fr in Listnr.prevframes)*norm
+        avpitch=sum(Fr.hands[0].direction.pitch for Fr in Listnr.frames)*Leap.RAD_TO_DEG*norm
+        avroll=sum(Fr.hands[0].palm_normal.roll for Fr in Listnr.frames)*Leap.RAD_TO_DEG*norm
+        avsphere=sum(Fr.hands[0].sphere_radius for Fr in Listnr.frames)*norm
+        prevavpitch=sum(Fr.hands[0].direction.pitch for Fr in Listnr.prevframes)*Leap.RAD_TO_DEG*norm
+        prevavroll=sum(Fr.hands[0].palm_normal.roll for Fr in Listnr.prevframes)*Leap.RAD_TO_DEG*norm
+        avnumfingers=sum(len(Fr.hands[0].fingers) for Fr in Listnr.frames)*norm
+        prevavnumfingers=sum(len(Fr.hands[0].fingers) for Fr in Listnr.prevframes)*norm
 
         avpos1=[0.,0.,0.]
         avvel1=[0.,0.,0.]
@@ -233,7 +232,7 @@ class HSNListener(Leap.Listener):
         avroll2=0.
         nadded=0
         naddedfing=[0]*mnfing
-        for Fr in HSNListener.frames[0:nframes]:
+        for Fr in Listnr.frames[0:nframes]:
             if Fr.hands[0].is_valid:
                 avpos1[0]+=Fr.hands[0].palm_position[0]
                 avpos1[1]+=Fr.hands[0].palm_position[1]
@@ -265,7 +264,7 @@ class HSNListener(Leap.Listener):
         avpos2=[0.,0.,0.]
         avvel2=[0.,0.,0.]
         nadded=0
-        for Fr in HSNListener.frames[0:nframes]:
+        for Fr in Listnr.frames[0:nframes]:
             if Fr.hands[1].is_valid:
                 avpos2[0]+=Fr.hands[1].palm_position[0]
                 avpos2[1]+=Fr.hands[1].palm_position[1]
@@ -306,7 +305,7 @@ class HSNListener(Leap.Listener):
                     validfinger[idx]=1
 
         naddedfing=[0]*mnfing
-        for Fr in HSNListener.prevframes[0:nframes]:
+        for Fr in Listnr.prevframes[0:nframes]:
             if Fr.hands[0].is_valid:
                 for finger in Fr.hands[0].fingers:
                     fid=finger.id
@@ -318,7 +317,7 @@ class HSNListener(Leap.Listener):
                     prevavfingy[fid]+=finger.tip_position[1]
                     prevavfingz[fid]+=finger.tip_position[2]
                     naddedfing[fid]+=1
-        for Fr in HSNListener.prevframes[0:nframes]:
+        for Fr in Listnr.prevframes[0:nframes]:
             if Fr.hands[1].is_valid:
                 for finger in Fr.hands[1].fingers:
                     fid=finger.id
@@ -343,9 +342,9 @@ class HSNListener(Leap.Listener):
                 palmpos=[0.,0.,0.]
                 for finger in hand.fingers: # Loop in fingers
                     fid=finger.id
-                    if HSNListener.fingerlock[fid] > 0: #locked?
-                        if (currentframe.timestamp-HSNListener.fingerlock[fid]*1.0)*1E-6 > 1:          # Release if locked over some time
-                            HSNListener.fingerlock[fid]=0.
+                    if Listnr.fingerlock[fid] > 0: #locked?
+                        if (currentframe.timestamp-Listnr.fingerlock[fid]*1.0)*1E-6 > 1:          # Release if locked over some time
+                            Listnr.fingerlock[fid]=0.
                     if validfinger[fid] == 1:
                         handid=int(avfinghand[fid])
                         pos=[avfingx[fid],avfingy[fid],avfingz[fid]]
@@ -356,29 +355,29 @@ class HSNListener(Leap.Listener):
                             palmpos=[avpos2[0],avpos2[1],avpos2[2]]
                             avvel=avvel2
     # release all locks if moving horizontally or upwards
-                        if abs(avvel[0]) > 1000 or HSNListener.releaselocks != 0: 
-                            if HSNListener.releaselocks == 0: 
-                                HSNListener.releaselocks = currentframe.timestamp
+                        if abs(avvel[0]) > 1000 or Listnr.releaselocks != 0: 
+                            if Listnr.releaselocks == 0: 
+                                Listnr.releaselocks = currentframe.timestamp
                                 print 'releasing locks for 2 seconds'#,avvel
                             else:
-                                if (currentframe.timestamp - HSNListener.releaselocks)*1e-6 > 2:
-                                    HSNListener.releaselocks = 0
+                                if (currentframe.timestamp - Listnr.releaselocks)*1e-6 > 2:
+                                    Listnr.releaselocks = 0
                                     print 'locks back in place'
                             for idx in range(mnfing):
-                                HSNListener.fingerlock[idx]=0.
+                                Listnr.fingerlock[idx]=0.
 
                         fingnote[finger.id]=0
                         if avfingy[fid]-prevavfingy[fid] < -10 and \
                                 abs(avfingy[fid]-prevavfingy[fid]) < 50 and \
-                                    HSNListener.fingerlock[finger.id] == 0: # Play note
-                            coordx=((pos[0]-HSNListener.offsetx)+200.)/400.*HSNListener.screenx
-                            coordx=min(coordx,HSNListener.screenx)
+                                    Listnr.fingerlock[finger.id] == 0: # Play note
+                            coordx=((pos[0]-Listnr.offsetx)+200.)/400.*Listnr.screenx
+                            coordx=min(coordx,Listnr.screenx)
                             coordx=max(coordx,0)
-                            coordy=(1.-((pos[1]-HSNListener.offsety))/400.)*HSNListener.screeny
-                            coordy=min(coordy,HSNListener.screeny)
+                            coordy=(1.-((pos[1]-Listnr.offsety))/400.)*Listnr.screeny
+                            coordy=min(coordy,Listnr.screeny)
                             coordy=max(coordy,0)
-                            HSNListener.root.warp_pointer(coordx,coordy)
-                            notes=chords.ChordKeys[chords2play[HSNListener.indchord]]
+                            Listnr.root.warp_pointer(coordx,coordy)
+                            notes=chords.ChordKeys[chords2play[Listnr.indchord]]
                             if pos[1] < 250:
                                 note=choice(notes)
                                 volume=127-int((pos[1]-100)/200.*125)
@@ -394,7 +393,7 @@ class HSNListener(Leap.Listener):
                                 if notenum >= 14: octave_shft+=1
                                 if notenum >= 21: octave_shft+=1
                                 note=chords.rotating_idx(basenotes,notenum)
-                                chordroot=chords2play[HSNListener.indchord]
+                                chordroot=chords2play[Listnr.indchord]
                                 chordroot=chordroot[0:2]
                                 notenum=72+chords.semitones[note]+chords.semitones[chordroot]+12*octave_shft
                                 volume=127-int((pos[1]-250.)/200.*125)
@@ -406,36 +405,36 @@ class HSNListener(Leap.Listener):
                             ocatve_shft=min(octave_shft,4)
                             notenum=max(notenum,0)
                             notenum=min(notenum,127)
-                            if HSNListener.fingerlock[finger.id] == 0:
-                                HSNListener.midi.note_off(notenum,0,0)
-                                HSNListener.midi.note_on(notenum,volume,0)
-                                HSNListener.noteson.append(notenum)
-                                HSNListener.notesonchan.append(0)
-                                HSNListener.fingerlock[finger.id] = currentframe.timestamp
-                                print hchar+'Chord:'+chords2play[HSNListener.indchord]+' Finger:'+str(fid)+', Note:'+note+', volume:',volume,' octave:',octave_shft,' hand=',avfinghand[fid]
+                            if Listnr.fingerlock[finger.id] == 0:
+                                Listnr.midi.note_off(notenum,0,0)
+                                Listnr.midi.note_on(notenum,volume,0)
+                                Listnr.noteson.append(notenum)
+                                Listnr.notesonchan.append(0)
+                                Listnr.fingerlock[finger.id] = currentframe.timestamp
+                                print hchar+'Chord:'+chords2play[Listnr.indchord]+' Finger:'+str(fid)+', Note:'+note+', volume:',volume,' octave:',octave_shft,' hand=',avfinghand[fid]
 
                             # Update chord when piano key pressed
-                            HSNListener.indchord=int(palmpos[2]/200.*len(chords2play))
-                            HSNListener.indchord=max(HSNListener.indchord,0)
-                            HSNListener.indchord=min(HSNListener.indchord,len(chords2play)-1)
+                            Listnr.indchord=int(palmpos[2]/200.*len(chords2play))
+                            Listnr.indchord=max(Listnr.indchord,0)
+                            Listnr.indchord=min(Listnr.indchord,len(chords2play)-1)
 
 
                         if avfingy[fid] > prevavfingy[fid]+10 or avfingvy[fid] > 40: # If finger moves up, release locks
-                            HSNListener.fingerlock[fid] = 0
+                            Listnr.fingerlock[fid] = 0
 
 
                     # Update chord when palm up
                     if abs(avroll1) > 160 or abs(avroll2)>160:
-                        HSNListener.indchord=int(palmpos[2]/200.*len(chords2play))
-                        HSNListener.indchord=max(HSNListener.indchord,0)
-                        HSNListener.indchord=min(HSNListener.indchord,len(chords2play)-1)
+                        Listnr.indchord=int(palmpos[2]/200.*len(chords2play))
+                        Listnr.indchord=max(Listnr.indchord,0)
+                        Listnr.indchord=min(Listnr.indchord,len(chords2play)-1)
                     addstringnote=0
                     changestringnote=0
-                    if len(HSNListener.stringnotes) == 0: 
+                    if len(Listnr.stringnotes) == 0: 
                         if abs(avroll1) > 160 or abs(avroll2)>160: # Strings
                             addstringnote=1
                     else:
-                        if not HSNListener.stringnotes[0] in chords2play[HSNListener.indchord]:
+                        if not Listnr.stringnotes[0] in chords2play[Listnr.indchord]:
                             changestringnote=1
                     if addstringnote == 1 or changestringnote == 1:
                         volume=127-int((palmpos[1]-50)/350.*125)
@@ -446,28 +445,28 @@ class HSNListener(Leap.Listener):
                         octave_shft=octave_shft-1
                         ocatve_shft=max(octave_shft,-2)
                         ocatve_shft=min(octave_shft,2)
-                        for note in HSNListener.stringnotes[1:]:
-                            HSNListener.midi.note_off(note,0,1)
-                        HSNListener.stringnotes=list()
-                        HSNListener.stringnotes.append(chords2play[HSNListener.indchord])
-                        note=chords.ChordKeys[chords2play[HSNListener.indchord]][0]
+                        for note in Listnr.stringnotes[1:]:
+                            Listnr.midi.note_off(note,0,1)
+                        Listnr.stringnotes=list()
+                        Listnr.stringnotes.append(chords2play[Listnr.indchord])
+                        note=chords.ChordKeys[chords2play[Listnr.indchord]][0]
                         notevalue=72+chords.semitones[note]+octave_shft*12
-                        HSNListener.stringnotes.append(notevalue)
-                        HSNListener.midi.note_on(notevalue,volume,1)
-                        HSNListener.noteson.append(notevalue)
-                        HSNListener.notesonchan.append(1)
+                        Listnr.stringnotes.append(notevalue)
+                        Listnr.midi.note_on(notevalue,volume,1)
+                        Listnr.noteson.append(notevalue)
+                        Listnr.notesonchan.append(1)
                         
-                        print 'Chord:',chords2play[HSNListener.indchord],' string note=',note,volume
+                        print 'Chord:',chords2play[Listnr.indchord],' string note=',note,volume
 
 
 
-                while len(HSNListener.noteson) > 15:
-                    removenote=HSNListener.noteson[0]
-                    removechan=HSNListener.notesonchan[0]
-                    HSNListener.noteson.pop(0)
-                    HSNListener.notesonchan.pop(0)
-                    if not removenote in HSNListener.noteson:
-                        HSNListener.midi.note_off(removenote,0,removechan)
+                while len(Listnr.noteson) > 15:
+                    removenote=Listnr.noteson[0]
+                    removechan=Listnr.notesonchan[0]
+                    Listnr.noteson.pop(0)
+                    Listnr.notesonchan.pop(0)
+                    if not removenote in Listnr.noteson:
+                        Listnr.midi.note_off(removenote,0,removechan)
 
     def state_string(self, state):
         if state == Leap.Gesture.STATE_START:
@@ -502,9 +501,9 @@ class SampleListener(Leap.Listener):
 
     def on_exit(self, controller):
         for idx in range(128):
-            HSNListener.midi.note_off(idx,0,0)
+            Listnr.midi.note_off(idx,0,0)
         for idx in range(128):
-            HSNListener.midi.note_off(idx,0,1)
+            Listnr.midi.note_off(idx,0,1)
         pygame.midi.quit()
         print "Exited"
 
@@ -601,7 +600,7 @@ class SampleListener(Leap.Listener):
 
 def main():
     # Create a sample listener and controller
-    listener = HSNListener()
+    listener = Listnr()
     controller = Leap.Controller()
 
     # Have the sample listener receive events from the controller
@@ -611,9 +610,9 @@ def main():
     print "Press Enter to quit..."
     sys.stdin.readline()
     for idx in range(128):
-        HSNListener.midi.note_off(idx,0,0)
+        Listnr.midi.note_off(idx,0,0)
     for idx in range(128):
-        HSNListener.midi.note_off(idx,0,1)
+        Listnr.midi.note_off(idx,0,1)
     os._exit(1)
 
     # Remove the sample listener when done
