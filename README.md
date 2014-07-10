@@ -3,6 +3,7 @@ MotionHarp
 
 MOTION HARP: Music with a 3D interface using the Leap Motion
 hsocas.iac@gmail.com
+Video demo: https://www.youtube.com/watch?v=pgwwnBqqcLI
 
 (2014) Hector Socas-Navarro: MOTION HARP
 Requirements:
